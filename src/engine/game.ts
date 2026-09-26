@@ -83,32 +83,101 @@ export function watchedBy(level: Level, w: WorldSnapshot): { id: string; kind: "
   return out;
 }
 
-/** Detection check for the thief standing at `pos` in world `w`. */
-export function detect(level: Level, w: WorldSnapshot, pos: Pt, bodies: Body[]): CaughtBy | null {
-  const pi = level.idx(pos.x, pos.y);
-  // a guard standing on you
+/**
+ * A cached, index-based view of one moment, used by the rules and the solver:
+ * which tile each active guard stands on, and the first sight source (in
+ * guard-then-camera order) that watches each tile. Rendering uses worldAt.
+ */
+interface Snap {
+  /** tile → active guard ids standing there (definition order) */
+  guardsAt: Map<number, string[]>;
+  /** tile → 1 + index into srcIds of the first source that sees it (0 = unseen) */
+  seen: Uint16Array;
+  srcIds: string[];
+  srcKinds: ("guard" | "camera")[];
+  laserOn: boolean[];
+  armored: Set<string>;
+}
+
+const snapCaches = new WeakMap<Level, { period: number | null; map: Map<string, Snap> }>();
+
+export function exactPeriod(def: VaultDef, cap = 5000): number | null {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  let p = 1;
+  const lens = [...def.guards.map((g) => g.route.length), ...def.cameras.map((c) => c.dirs.length), ...def.lasers.map((l) => l.pattern.length)];
+  for (const n of lens) {
+    p = (p / gcd(p, n)) * n;
+    if (p > cap) return null;
+  }
+  return p;
+}
+
+function snapAt(level: Level, t: number, down: string[], empUntil: number): Snap {
+  let cache = snapCaches.get(level);
+  if (!cache) {
+    cache = { period: exactPeriod(level.def), map: new Map() };
+    snapCaches.set(level, cache);
+  }
+  const empActive = t <= empUntil;
+  const tk = cache.period === null ? t : t % cache.period;
+  const key = `${tk}|${down.length ? [...down].sort().join(",") : ""}|${empActive ? 1 : 0}`;
+  const hit = cache.map.get(key);
+  if (hit) return hit;
+  const w = worldAt(level, t, down, empUntil);
+  const guardsAt = new Map<number, string[]>();
   for (const g of w.guards) {
-    if (!g.down && g.x === pos.x && g.y === pos.y) return { kind: "guard", id: g.id };
+    if (g.down) continue;
+    const i = level.idx(g.x, g.y);
+    const list = guardsAt.get(i);
+    if (list) list.push(g.id);
+    else guardsAt.set(i, [g.id]);
   }
-  const sources = watchedBy(level, w);
-  for (const s of sources) {
-    if (s.tiles.includes(pi)) return { kind: s.kind, id: s.id };
+  const seen = new Uint16Array(level.w * level.h);
+  const srcIds: string[] = [];
+  const srcKinds: ("guard" | "camera")[] = [];
+  for (const src of watchedBy(level, w)) {
+    srcIds.push(src.id);
+    srcKinds.push(src.kind);
+    const n = srcIds.length;
+    for (const i of src.tiles) if (seen[i] === 0) seen[i] = n;
   }
+  const snap: Snap = {
+    guardsAt,
+    seen,
+    srcIds,
+    srcKinds,
+    laserOn: w.lasers.map((l) => l.on),
+    armored: new Set(level.def.guards.filter((g) => g.armored).map((g) => g.id)),
+  };
+  if (cache.map.size > 50000) cache.map.clear();
+  cache.map.set(key, snap);
+  return snap;
+}
+
+function detectSnap(level: Level, s: Snap, pos: Pt, bodies: Body[]): CaughtBy | null {
+  const pi = level.idx(pos.x, pos.y);
+  const on = s.guardsAt.get(pi);
+  if (on) return { kind: "guard", id: on[0] };
+  const src = s.seen[pi];
+  if (src) return { kind: s.srcKinds[src - 1], id: s.srcIds[src - 1] };
   const lasers = level.laserAt.get(pi);
   if (lasers) {
-    for (const li of lasers) if (w.lasers[li].on) return { kind: "laser", id: w.lasers[li].id };
+    for (const li of lasers) if (s.laserOn[li]) return { kind: "laser", id: level.def.lasers[li].id };
   }
-  // bodies: seen by any sight source, or stumbled over by a guard
   for (const b of bodies) {
     const bi = level.idx(b.x, b.y);
-    for (const g of w.guards) {
-      if (!g.down && g.x === b.x && g.y === b.y) return { kind: "body", id: b.guard, seenBy: g.id };
-    }
-    for (const s of sources) {
-      if (s.tiles.includes(bi)) return { kind: "body", id: b.guard, seenBy: s.id };
-    }
+    const stumble = s.guardsAt.get(bi);
+    if (stumble) return { kind: "body", id: b.guard, seenBy: stumble[0] };
+    const bs = s.seen[bi];
+    if (bs) return { kind: "body", id: b.guard, seenBy: s.srcIds[bs - 1] };
   }
   return null;
+}
+
+/** Detection check for the thief standing at `pos` at time t. */
+export function detect(level: Level, w: WorldSnapshot, pos: Pt, bodies: Body[]): CaughtBy | null {
+  const down = w.guards.filter((g) => g.down).map((g) => g.id);
+  return detectSnap(level, snapAt(level, w.t, down, w.empActive ? w.t : -1), pos, bodies);
 }
 
 /** Is the vault's opening position already detected? (a broken vault) */
@@ -156,13 +225,17 @@ export function step(level: Level, state: GameState, action: Action): StepResult
   };
 
   // 2. takedown
-  const now = worldAt(level, state.t, down, empUntil);
-  for (const g of now.guards) {
-    if (g.down || g.x !== pos.x || g.y !== pos.y) continue;
-    if (g.armored) return caught({ kind: "armored", id: g.id }, state.t + 1);
-    down = [...down, g.id];
-    bodies = [...bodies, { x: pos.x, y: pos.y, guard: g.id }];
-    events.push({ type: "takedown", guard: g.id, at: pos });
+  const here = snapAt(level, state.t, down, empUntil).guardsAt.get(level.idx(pos.x, pos.y));
+  if (here) {
+    const armoredSet = snapAt(level, state.t, down, empUntil).armored;
+    for (const id of here) {
+      if (armoredSet.has(id)) return caught({ kind: "armored", id }, state.t + 1);
+    }
+    for (const id of here) {
+      down = [...down, id];
+      bodies = [...bodies, { x: pos.x, y: pos.y, guard: id }];
+      events.push({ type: "takedown", guard: id, at: pos });
+    }
   }
 
   // 3. pick up
@@ -186,8 +259,7 @@ export function step(level: Level, state: GameState, action: Action): StepResult
 
   // 5 + 6. tick, then detect
   const t = state.t + 1;
-  const next = worldAt(level, t, down, empUntil);
-  const seen = detect(level, next, pos, bodies);
+  const seen = detectSnap(level, snapAt(level, t, down, empUntil), pos, bodies);
   if (seen) return caught(seen, t);
 
   // 7. clock
