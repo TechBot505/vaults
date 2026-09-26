@@ -25,7 +25,7 @@ export interface HeistController {
  * Game loop for one vault: applies actions through the engine, keeps a short
  * trail, turns engine events into sounds and visual effects.
  */
-export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState) => void; onAttempt?: (s: GameState) => void } = {}): HeistController {
+export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState, ms: number) => void; onAttempt?: (s: GameState) => void } = {}): HeistController {
   const level = useMemo(() => new Level(def), [def]);
   const [state, setState] = useState<GameState>(() => newGame(def));
   const [trail, setTrail] = useState<Pt[]>([]);
@@ -34,6 +34,8 @@ export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState) => void; 
   const [shake, setShake] = useState(0);
   const [lastEvents, setLastEvents] = useState<GameEvent[]>([]);
   const stateRef = useRef(state);
+  /** when the current run's first move was made (for the server's sanity check on run speed) */
+  const startedAt = useRef(0);
   const optsRef = useRef(opts);
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -62,6 +64,7 @@ export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState) => void; 
       const cur = stateRef.current;
       if (cur.status !== "playing") return false;
       const r = step(level, cur, a);
+      if (r.ok && cur.moves.length === 0) startedAt.current = Date.now();
       if (!r.ok) {
         if (r.reason !== "over") sfx("blocked");
         return false;
@@ -94,7 +97,7 @@ export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState) => void; 
           setShake((n) => n + 1);
         } else if (e.type === "cracked") sfx("cracked");
       }
-      if (next.status !== "playing") optsRef.current.onEnd?.(next);
+      if (next.status !== "playing") optsRef.current.onEnd?.(next, Date.now() - startedAt.current);
       return true;
     },
     [level, pushFx],

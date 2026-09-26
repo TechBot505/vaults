@@ -16,7 +16,7 @@ import { sfx } from "@/lib/sound";
 import { Canvas } from "./Canvas";
 import { Checks } from "./Checks";
 import { Inspector } from "./Inspector";
-import { Modal, ShareLink } from "./Publish";
+import { Modal, PublishPublic, ShareLink } from "./Publish";
 import { TOOLS, Toolbar } from "./tools";
 
 /** A starter vault: small, clearly crackable, and teaches the tools by example. */
@@ -30,7 +30,7 @@ function isTyping(e: KeyboardEvent) {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 }
 
-export function BuildClient({ fork, draft }: { fork: { def: VaultDef; title: string } | null; draft: string | null }) {
+export function BuildClient({ fork, draft, server }: { fork: { def: VaultDef; title: string } | null; draft: string | null; server: { publicVaults: boolean; handle: string | null } }) {
   const draftId = useEditor((s) => s.draftId);
   const doc = useEditor((s) => s.doc);
   const proof = useEditor((s) => s.proof);
@@ -338,9 +338,28 @@ export function BuildClient({ fork, draft }: { fork: { def: VaultDef; title: str
       {publishing && canPublish && (
         <Modal onClose={() => setPublishing(false)} label="Publish">
           <div className="label mb-1 text-gold">ready</div>
-          <h2 className="font-display text-2xl text-paper">{doc.title}</h2>
-          <p className="mt-2 text-sm text-dim">Send this link to anyone. They get your vault exactly as you built it{bestTurns ? `, with the Machine's ${bestTurns}-turn best as par` : ""}.</p>
-          <div className="mt-4">
+          <input
+            value={doc.title}
+            maxLength={60}
+            onChange={(e) => {
+              const st = useEditor.getState();
+              st.commit({ ...st.doc, title: e.target.value }, true);
+            }}
+            className="font-display -ml-2 w-[calc(100%-1.5rem)] rounded-md border border-line/0 bg-transparent px-2 py-0.5 text-2xl text-paper outline-none hover:border-line focus:border-cyan/60"
+            aria-label="Vault name"
+          />
+          {doc.title.trim() === "" || doc.title === "Untitled vault" ? <p className="text-xs text-amber">Give it a name people will remember.</p> : null}
+          <p className="mt-2 text-sm text-dim">
+            You cracked it in {proofTurns} turns{bestTurns ? `; the Machine's best is ${bestTurns}` : ""}. Now let the internet try.
+          </p>
+          {server.publicVaults && (
+            <div className="mt-4">
+              <PublishPublic def={def} title={doc.title} proof={proof!.moves} />
+              <p className="mt-2 text-xs text-faint">Public vaults get a page, a leaderboard and a spot in the vault list{server.handle ? ` under @${server.handle}` : ""}.</p>
+            </div>
+          )}
+          <div className={server.publicVaults ? "mt-5 border-t border-line pt-4" : "mt-4"}>
+            <div className="label mb-2 text-dim">{server.publicVaults ? "or share privately" : "share it"}</div>
             <ShareLink def={def} title={doc.title} par={bestTurns ?? proofTurns ?? undefined} />
           </div>
         </Modal>

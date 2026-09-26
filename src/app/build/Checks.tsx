@@ -1,21 +1,12 @@
 "use client";
 
-import { AlertTriangle, BrainCircuit, CheckCircle2, CircleDashed, Eye, Loader2, Lock, Play, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, BrainCircuit, CheckCircle2, CircleDashed, Eye, Loader2, Play, ShieldQuestion } from "lucide-react";
+import { Locks } from "@/components/Locks";
 import { securityRating } from "@/engine/solver";
 import type { Problem } from "@/engine/validate";
 import type { VaultDef } from "@/engine/types";
 import type { MachineState } from "@/lib/machine";
 import { Section } from "./Inspector";
-
-export function Locks({ n, size = 13 }: { n: number; size?: number }) {
-  return (
-    <span className="inline-flex gap-0.5" aria-label={`${n} of 5 locks`}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Lock key={i} size={size} className={i <= n ? "text-gold drop-shadow-[0_0_4px_var(--gold)]" : "text-faint"} />
-      ))}
-    </span>
-  );
-}
 
 function Row({ ok, pending, children }: { ok: boolean; pending?: boolean; children: React.ReactNode }) {
   return (

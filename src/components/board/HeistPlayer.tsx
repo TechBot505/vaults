@@ -22,7 +22,8 @@ export interface HeistPlayerProps {
   /** rendered in the cracked panel (share buttons, next heist…) */
   crackedActions?: (s: GameState) => ReactNode;
   caughtActions?: (s: GameState) => ReactNode;
-  onEnd?: (s: GameState, attempt: number) => void;
+  /** a run ended; `ms` is how long it took from the first move */
+  onEnd?: (s: GameState, attempt: number, ms: number) => void;
   /** a run abandoned with a restart */
   onAbandon?: (s: GameState, attempt: number) => void;
 }
@@ -51,7 +52,7 @@ export function HeistPlayer({ def, title, kicker, par, intro, crackedActions, ca
   const stepMs = settings.speed === "fast" ? 90 : 150;
   const attemptRef = useRef(1);
   const game = useHeist(def, {
-    onEnd: (s) => onEnd?.(s, attemptRef.current),
+    onEnd: (s, ms) => onEnd?.(s, attemptRef.current, ms),
     onAttempt: (s) => onAbandon?.(s, attemptRef.current),
   });
   useEffect(() => {

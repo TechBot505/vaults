@@ -1,0 +1,111 @@
+// VAULTS · database schema
+//
+// A vault's definition is stored as JSON exactly as the engine reads it. Every
+// outcome is recomputed on the server by replaying the move string through the
+// same deterministic engine the browser runs, so nothing a client claims is
+// trusted: not a crack, not a capture, not a turn count.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  clerkId     String   @unique
+  /// public handle, used in /u/[handle]
+  handle      String   @unique
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+
+  vaults   Vault[]
+  cracks   Crack[]
+  attempts Attempt[]
+}
+
+model Vault {
+  id        String   @id @default(cuid())
+  /// short public code: /v/[code]
+  code      String   @unique
+  title     String
+  /// VaultDef JSON (validated on publish)
+  def       Json
+  /// hash of def: the same vault can't be published twice
+  hash      String   @unique
+  creatorId String
+  creator   User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  /// the builder's own crack (never sent to players)
+  proof     String
+  /// shortest crack known (the Machine's, or the builder's if it gave up)
+  par       Int
+  /// 1–5 locks
+  rating    Int
+  /// the Machine couldn't finish its search
+  machineGaveUp Boolean @default(false)
+  /// counters (players only: the creator's own runs don't count)
+  attempts  Int      @default(0)
+  cracks    Int      @default(0)
+  /// best crack by anyone other than the creator
+  bestTurns Int?
+  firstCrackAt DateTime?
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  lastPlayedAt DateTime @default(now())
+
+  attemptRows Attempt[]
+  crackRows   Crack[]
+
+  @@index([createdAt])
+  @@index([lastPlayedAt])
+  @@index([creatorId])
+}
+
+/// One finished run (cracked or caught), verified by replay.
+model Attempt {
+  id        String   @id @default(cuid())
+  vaultId   String
+  vault     Vault    @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// anonymous device id (counts unique players)
+  player    String
+  /// "cracked" | "caught"
+  outcome   String
+  turns     Int
+  moves     String
+  /// guard | armored | camera | laser | body | timeout
+  caughtBy  String?
+  /// where the run ended
+  x         Int
+  y         Int
+  createdAt DateTime @default(now())
+
+  @@index([vaultId, createdAt])
+  @@index([vaultId, outcome])
+  @@index([userId])
+}
+
+/// A signed-in player's best crack of a vault.
+model Crack {
+  id        String   @id @default(cuid())
+  vaultId   String
+  vault     Vault    @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turns     Int
+  moves     String
+  /// leaderboard points earned (vault rating when first cracked, plus first-blood bonus)
+  points    Int
+  first     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vaultId, userId])
+  @@index([vaultId, turns])
+  @@index([userId])
+}
