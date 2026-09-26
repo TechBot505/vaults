@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Vaults", description: "Vaults built 
 
 const TABS: { id: Sort; label: string; blurb: string }[] = [
   { id: "trending", label: "trending", blurb: "Where the thieves are right now." },
-  { id: "unbroken", label: "unbroken", blurb: "Nobody has ever gotten the loot out of these." },
+  { id: "unbroken", label: "unbroken", blurb: "Three runs or more, and nobody has ever gotten the loot out." },
   { id: "hardest", label: "hardest", blurb: "Lowest crack rate, five runs or more." },
   { id: "new", label: "new", blurb: "Fresh off the drawing board." },
 ];

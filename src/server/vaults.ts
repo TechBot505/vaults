@@ -311,7 +311,7 @@ export async function listVaults(sort: Sort, take = 24): Promise<VaultCard[]> {
   const where = { hidden: false };
   if (sort === "new") return (await prisma.vault.findMany({ where, orderBy: { createdAt: "desc" }, take, include })).map(card);
   if (sort === "unbroken") {
-    return (await prisma.vault.findMany({ where: { ...where, cracks: 0 }, orderBy: [{ attempts: "desc" }, { createdAt: "desc" }], take, include })).map(card);
+    return (await prisma.vault.findMany({ where: { ...where, cracks: 0, attempts: { gte: 3 } }, orderBy: [{ attempts: "desc" }, { createdAt: "desc" }], take, include })).map(card);
   }
   if (sort === "hardest") {
     const ids = await prisma.$queryRaw<{ id: string }[]>`
@@ -394,4 +394,14 @@ export async function hideVault(code: string, user: AuthedUser) {
   if (!v) throw new HttpError(404, "vault not found");
   if (v.creatorId !== user.id) throw new HttpError(403, "only the builder can take a vault down");
   await prisma.vault.update({ where: { id: v.id }, data: { hidden: true } });
+}
+
+export async function siteStats(): Promise<{ vaults: number; attempts: number; cracks: number; caught: number } | null> {
+  await connection();
+  const prisma = db();
+  if (!prisma) return null;
+  const agg = await prisma.vault.aggregate({ where: { hidden: false }, _count: { _all: true }, _sum: { attempts: true, cracks: true } });
+  const attempts = agg._sum.attempts ?? 0;
+  const cracks = agg._sum.cracks ?? 0;
+  return { vaults: agg._count._all, attempts, cracks, caught: attempts - cracks };
 }

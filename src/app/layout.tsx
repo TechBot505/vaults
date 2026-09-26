@@ -9,7 +9,10 @@ import { Providers } from "@/components/Providers";
 import { clerkEnabled } from "@/server/env";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.URL /* Netlify */ ?? "http://localhost:3000"),
+  ),
   title: { default: "VAULTS · build a vault nobody can crack", template: "%s · VAULTS" },
   description: "A turn-based heist game. Crack impossible vaults, then build your own and dare the internet to break in.",
   openGraph: { title: "VAULTS", description: "Build a vault nobody can crack.", type: "website" },
