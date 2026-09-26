@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Level } from "@/engine/geometry";
 import { newGame, step } from "@/engine/game";
 import type { Action, GameEvent, GameState, Pt, VaultDef } from "@/engine/types";
@@ -34,9 +34,11 @@ export function useHeist(def: VaultDef, opts: { onEnd?: (s: GameState) => void; 
   const [shake, setShake] = useState(0);
   const [lastEvents, setLastEvents] = useState<GameEvent[]>([]);
   const stateRef = useRef(state);
-  stateRef.current = state;
   const optsRef = useRef(opts);
-  optsRef.current = opts;
+  useLayoutEffect(() => {
+    stateRef.current = state;
+    optsRef.current = opts;
+  });
 
   // reset when the vault itself changes
   const [defSeen, setDefSeen] = useState(def);

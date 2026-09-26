@@ -54,10 +54,12 @@ export function HeistPlayer({ def, title, kicker, par, intro, crackedActions, ca
     onEnd: (s) => onEnd?.(s, attemptRef.current),
     onAttempt: (s) => onAbandon?.(s, attemptRef.current),
   });
-  attemptRef.current = game.attempt;
+  useEffect(() => {
+    attemptRef.current = game.attempt;
+  }, [game.attempt]);
   const { state, level } = game;
   const [inspect, setInspect] = useState<Inspect>(null);
-  const [shaking, setShaking] = useState(false);
+  const shakeRef = useRef<HTMLDivElement>(null);
   const lastAct = useRef(0);
   const touch = useMediaQuery("(pointer: coarse)");
   const { ref: boxRef, tile } = useTileSize(def.w, def.h, { max: 58 });
@@ -72,12 +74,22 @@ export function HeistPlayer({ def, title, kicker, par, intro, crackedActions, ca
     [game, stepMs],
   );
 
+  // screen shake on capture (Web Animations: no re-render needed)
   useEffect(() => {
-    if (!game.shake || !settings.effects) return;
-    setShaking(true);
-    const t = setTimeout(() => setShaking(false), 480);
-    return () => clearTimeout(t);
-  }, [game.shake, settings.effects]);
+    if (!game.shake || !useSettings.getState().effects) return;
+    shakeRef.current?.animate(
+      [
+        { transform: "translate(0,0)" },
+        { transform: "translate(-6px,2px)" },
+        { transform: "translate(5px,-3px)" },
+        { transform: "translate(-4px,3px)" },
+        { transform: "translate(3px,-1px)" },
+        { transform: "translate(-1px,1px)" },
+        { transform: "translate(0,0)" },
+      ],
+      { duration: 450, easing: "ease-out" },
+    );
+  }, [game.shake]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -199,7 +211,7 @@ export function HeistPlayer({ def, title, kicker, par, intro, crackedActions, ca
 
       {/* board */}
       <div ref={boxRef} className="relative mx-auto flex min-h-[46vh] w-full max-w-[1200px] flex-1 items-center justify-center px-2" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
-        <div className={`relative ${shaking ? "shake" : ""}`}>
+        <div ref={shakeRef} className="relative">
           <Board
             level={level}
             scene={scene}
