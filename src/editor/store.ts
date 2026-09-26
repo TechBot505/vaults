@@ -44,7 +44,7 @@ interface EditorState {
   /** timeline preview turn */
   t: number;
   load: (id: string, doc: EditorDoc, proof?: Proof | null) => void;
-  /** apply a change; `merge` coalesces continuous strokes into one undo step */
+  /** apply a change; `merge` joins it to the previous undo step */
   commit: (doc: EditorDoc, merge?: boolean) => void;
   undo: () => void;
   redo: () => void;
@@ -106,8 +106,6 @@ export function newDraftId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-let lastMerge = 0;
-
 export const useEditor = create<EditorState>((set, get) => ({
   draftId: "",
   doc: blankDoc(),
@@ -123,9 +121,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   commit: (doc, merge = false) => {
     const { doc: prev, past } = get();
     if (doc === prev) return;
-    const now = Date.now();
-    const coalesce = merge && now - lastMerge < 800 && past.length > 0;
-    lastMerge = merge ? now : 0;
+    // `merge` folds this change into the previous undo step (the rest of a brush stroke, a slider drag)
+    const coalesce = merge && past.length > 0;
     set({ doc, past: coalesce ? past : [...past.slice(-99), prev], future: [] });
   },
   undo: () => {

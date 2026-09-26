@@ -122,6 +122,22 @@ function BoardImpl({
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
+        {/* straight beams have a zero-height bounding box, so their glow needs a fixed region (sized for the largest vault) */}
+        <filter id="glow-beam" filterUnits="userSpaceOnUse" x="-2" y="-2" width="30" height="24">
+          <feGaussianBlur stdDeviation="0.2" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="glow-beam-soft" filterUnits="userSpaceOnUse" x="-2" y="-2" width="30" height="24">
+          <feGaussianBlur stdDeviation="0.09" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <pattern id="tilegrid" width="1" height="1" patternUnits="userSpaceOnUse">
           <path d="M1 0V1H0" fill="none" stroke="var(--line)" strokeWidth="0.02" />
         </pattern>
@@ -200,7 +216,7 @@ function BoardImpl({
           <g key={l.id} onPointerEnter={onInspect ? () => onInspect({ kind: "laser", id: l.id }) : undefined} onPointerLeave={onInspect ? () => onInspect(null) : undefined}>
             <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="transparent" strokeWidth="0.5" />
             {on ? (
-              <g className="laser-live" filter="url(#glow-strong)">
+              <g className="laser-live" filter="url(#glow-beam)">
                 <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="var(--laser)" strokeWidth={hl ? 0.14 : 0.08} strokeLinecap="round" />
                 <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#fff" strokeWidth="0.022" strokeLinecap="round" opacity="0.9" />
               </g>
@@ -385,7 +401,7 @@ function BoardImpl({
         if (!src) return null;
         const target = caught.kind === "body" ? scene.bodies.find((b) => b.guard === caught.id) ?? scene.thief : scene.thief;
         return (
-          <line x1={src.x + 0.5} y1={src.y + 0.5} x2={target.x + 0.5} y2={target.y + 0.5} stroke="var(--alarm)" strokeWidth="0.05" strokeDasharray="0.12 0.08" className="dash-march" filter="url(#glow)" />
+          <line x1={src.x + 0.5} y1={src.y + 0.5} x2={target.x + 0.5} y2={target.y + 0.5} stroke="var(--alarm)" strokeWidth="0.05" strokeDasharray="0.12 0.08" className="dash-march" filter="url(#glow-beam-soft)" />
         );
       })()}
 
